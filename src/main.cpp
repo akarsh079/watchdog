@@ -1,4 +1,8 @@
 #include <Arduino.h>
+constexpr uint8_t STATUS_LED_PIN = 25;
+constexpr float FAULT_THRESHOLD_PA = 35.0f;
+
+
 struct Reading{
   float pressure;
   uint32_t timestampMS;
@@ -46,6 +50,12 @@ void comparatorTask(void *param){
     if (xQueueReceive(queueB, &rB, portMAX_DELAY) != pdTRUE) {continue;}
     int32_t dt = static_cast<int32_t>(rB.timestampMS - rA.timestampMS);
     float dp = rB.pressure - rA.pressure;
+    if(fabsf(dp) > FAULT_THRESHOLD_PA){
+      digitalWrite(STATUS_LED_PIN, HIGH);
+    }
+    else{
+      digitalWrite(STATUS_LED_PIN, LOW);
+    }
     Serial.print("tA=");
     Serial.print(rA.timestampMS);
     Serial.print(" tB=");
@@ -63,6 +73,8 @@ void comparatorTask(void *param){
 
 void setup(){
   Serial.begin(115200);
+  pinMode(STATUS_LED_PIN, OUTPUT);
+  digitalWrite(STATUS_LED_PIN, LOW);
   queueA = xQueueCreate(10, sizeof(Reading));
   queueB = xQueueCreate(10, sizeof(Reading));
   xTaskCreate(myTaskA, "A", 4096, NULL, 1, NULL);
