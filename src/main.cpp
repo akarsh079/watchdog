@@ -6,14 +6,15 @@ struct Reading{
 };
 
 QueueHandle_t queueA;
+QueueHandle_t queueB;
 
 void myTaskA(void *param) {
   TickType_t lastWake = xTaskGetTickCount();
   for (;;) {
     delay(30);
-    Reading result = {101325.0f, millis(), 0};
+    Reading result = {101325.0f + random(-5, 6), millis(), 0};
     if(xQueueSend(queueA, &result, 0) != pdTRUE){
-      Serial.print("time: ");
+      Serial.print("A full at: ");
       Serial.print(result.timestampMS);
       Serial.print(" # of items: ");
       Serial.println(uxQueueMessagesWaiting(queueA));
@@ -22,25 +23,51 @@ void myTaskA(void *param) {
   }
 }
 
-void printerTask(void *param){
-  for(;;){
-    Reading output;
-    if (xQueueReceive(queueA, &output, portMAX_DELAY) == pdTRUE) {
-      Serial.print("id=");
-      Serial.print(output.sensorId);
-      Serial.print(" pressure=");
-      Serial.print(output.pressure);
-      Serial.print(" time=");
-      Serial.println(output.timestampMS);
+void myTaskB(void *param) {
+  TickType_t lastWake = xTaskGetTickCount();
+  for (;;) {
+    delay(50);
+    Reading result = {101355.0f + random(-5, 6), millis(), 1};
+    if(xQueueSend(queueB, &result, 0) != pdTRUE){
+      Serial.print("B full at:  ");
+      Serial.print(result.timestampMS);
+      Serial.print(" # of items: ");
+      Serial.println(uxQueueMessagesWaiting(queueB));
     }
+    vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(500));
+  }
+}
+
+void comparatorTask(void *param){
+  for(;;){
+    Reading rA;
+    if (xQueueReceive(queueA, &rA, portMAX_DELAY) != pdTRUE) {continue;}
+    Reading rB;
+    if (xQueueReceive(queueB, &rB, portMAX_DELAY) != pdTRUE) {continue;}
+    int32_t dt = static_cast<int32_t>(rB.timestampMS - rA.timestampMS);
+    float dp = rB.pressure - rA.pressure;
+    Serial.print("tA=");
+    Serial.print(rA.timestampMS);
+    Serial.print(" tB=");
+    Serial.print(rB.timestampMS);
+    Serial.print(" dt=");
+    Serial.print(dt);
+    Serial.print(" pA=");
+    Serial.print(rA.pressure);
+    Serial.print(" pB=");
+    Serial.print(rB.pressure);
+    Serial.print(" dp=");
+    Serial.println(dp);
   }
 }
 
 void setup(){
   Serial.begin(115200);
   queueA = xQueueCreate(10, sizeof(Reading));
-  xTaskCreate(printerTask, "Printer Task", 4096, NULL, 1, NULL);
+  queueB = xQueueCreate(10, sizeof(Reading));
   xTaskCreate(myTaskA, "A", 4096, NULL, 1, NULL);
+  xTaskCreate(myTaskB, "B", 4096, NULL, 1, NULL);
+  xTaskCreate(comparatorTask, "C", 4096, NULL, 1, NULL);
 }
 
 void loop(){
