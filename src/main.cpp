@@ -8,7 +8,9 @@ struct Reading{
 QueueHandle_t queueA;
 
 void myTaskA(void *param) {
+  TickType_t lastWake = xTaskGetTickCount();
   for (;;) {
+    delay(30);
     Reading result = {101325.0f, millis(), 0};
     if(xQueueSend(queueA, &result, 0) != pdTRUE){
       Serial.print("time: ");
@@ -16,20 +18,21 @@ void myTaskA(void *param) {
       Serial.print(" # of items: ");
       Serial.println(uxQueueMessagesWaiting(queueA));
     }
-
-    vTaskDelay(pdMS_TO_TICKS(500));
+    vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(500));
   }
 }
 
 void printerTask(void *param){
   for(;;){
     Reading output;
-    Serial.print("id=");
-    Serial.print(output.sensorId);
-    Serial.print(" pressure=");
-    Serial.print(output.pressure);
-    Serial.print(" time=");
-    Serial.println(output.timestampMS);
+    if (xQueueReceive(queueA, &output, portMAX_DELAY) == pdTRUE) {
+      Serial.print("id=");
+      Serial.print(output.sensorId);
+      Serial.print(" pressure=");
+      Serial.print(output.pressure);
+      Serial.print(" time=");
+      Serial.println(output.timestampMS);
+    }
   }
 }
 
