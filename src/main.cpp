@@ -1,6 +1,10 @@
 #include <Arduino.h>
+#include <Wire.h>
+// constants
 constexpr uint8_t STATUS_LED_PIN = 25;
 constexpr float FAULT_THRESHOLD_PA = 35.0f;
+constexpr uint8_t SDA_PIN = 21; 
+constexpr uint8_t SCL_PIN = 22; 
 
 
 struct Reading{
@@ -71,10 +75,35 @@ void comparatorTask(void *param){
   }
 }
 
+void scanI2C(){
+  uint8_t count = 0;
+  for (uint8_t address = 1; address < 127; ++address){
+    Wire.beginTransmission(address);
+    uint8_t result = Wire.endTransmission();
+    if(result == 0){
+      Serial.print("0x");
+      Serial.println(address, HEX);
+      ++count;
+    }
+  }
+  if(count == 0){
+    Serial.println("No I2C devices found - check wiring");
+  }
+  else{
+    Serial.print("Found ");
+    Serial.print(count);
+    Serial.println(" device(s)");
+  }
+}
+
 void setup(){
   Serial.begin(115200);
   pinMode(STATUS_LED_PIN, OUTPUT);
   digitalWrite(STATUS_LED_PIN, LOW);
+
+  Wire.begin(SDA_PIN, SCL_PIN);
+  scanI2C();
+
   queueA = xQueueCreate(10, sizeof(Reading));
   queueB = xQueueCreate(10, sizeof(Reading));
   xTaskCreate(myTaskA, "A", 4096, NULL, 1, NULL);
