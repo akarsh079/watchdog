@@ -1,11 +1,12 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <Adafruit_BMP280.h>
 // constants
 constexpr uint8_t STATUS_LED_PIN = 25;
 constexpr float FAULT_THRESHOLD_PA = 35.0f;
 constexpr uint8_t SDA_PIN = 21; 
 constexpr uint8_t SCL_PIN = 22; 
-
+constexpr uint8_t SENSOR_ADDRESS = 0x77; 
 
 struct Reading{
   float pressure;
@@ -13,14 +14,15 @@ struct Reading{
   uint8_t sensorId;
 };
 
+Adafruit_BMP280 bmp;
 QueueHandle_t queueA;
 QueueHandle_t queueB;
 
 void myTaskA(void *param) {
   TickType_t lastWake = xTaskGetTickCount();
   for (;;) {
-    delay(30);
-    Reading result = {101325.0f + random(-5, 6), millis(), 0};
+    float p = bmp.readPressure(); 
+    Reading result = {p, millis(), 0};
     if(xQueueSend(queueA, &result, 0) != pdTRUE){
       Serial.print("A full at: ");
       Serial.print(result.timestampMS);
@@ -103,6 +105,18 @@ void setup(){
 
   Wire.begin(SDA_PIN, SCL_PIN);
   scanI2C();
+
+  bool ok = bmp.begin(SENSOR_ADDRESS);
+  if(!ok){
+    Serial.println("BMP280 not found at 0x77");
+  }
+  else{
+    Serial.print("BMP280 OK: P=");
+    Serial.print(bmp.readPressure());
+    Serial.print(" Pa, T=");
+    Serial.print(bmp.readTemperature());
+    Serial.println(" C");
+  }
 
   queueA = xQueueCreate(10, sizeof(Reading));
   queueB = xQueueCreate(10, sizeof(Reading));
